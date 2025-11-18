@@ -1,0 +1,13 @@
+server-monitor/
+├── docker-compose.yml       # Docker编排文件
+├── frontend/                # 前端Vue项目
+│   ├── Dockerfile           # 前端Docker构建文件
+│   ├── package.json         # 前端依赖配置
+│   ├── server.js            # 前端服务入口
+│   └── index.html           # 监控大屏页面（完整无省略）
+├── backend/                 # 后端Python项目
+│   ├── Dockerfile           # 后端Docker构建文件
+│   ├── requirements.txt     # 后端依赖配置
+│   └── app.py               # 后端服务代码
+└── mysql/                   # 数据库初始化
+    └── init.sql             # 数据库表结构初始化
