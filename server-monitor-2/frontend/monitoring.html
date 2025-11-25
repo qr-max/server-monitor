@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务器监控大屏</title>
+    <!-- 依赖库CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        /* 页面切换导航样式 */
+        .page-nav {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .page-nav a {
+            margin-right: 20px;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        .page-nav a.active {
+            color: #0d6efd;
+            text-decoration: underline;
+        }
+        /* 统计卡片样式 */
+        .stat-card {
+            height: 100%;
+            padding: 15px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .stat-card .card-title {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        .stat-card .card-text {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="container p-3">
+    <!-- 页面切换导航 -->
+    <div class="page-nav">
+        <a href="/monitoring" class="active">监控大屏</a>
+        <a href="/data-management">数据管理</a>
+    </div>
+
+    <!-- 页面标题 -->
+    <h1 class="mb-4 text-center">服务器监控大屏</h1>
+
+    <!-- 1. 系统统计卡片 -->
+    <div class="row mb-4" id="stats-container">
+        <!-- 统计数据将通过JS动态渲染 -->
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">总服务器数</div>
+                    <div class="card-text" id="total-servers">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">在线服务器</div>
+                    <div class="card-text text-success" id="online-servers">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">告警服务器</div>
+                    <div class="card-text text-warning" id="alert-servers">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">未解决告警</div>
+                    <div class="card-text text-danger" id="total-alerts">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">平均CPU使用率</div>
+                    <div class="card-text" id="avg-cpu">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">平均内存使用率</div>
+                    <div class="card-text" id="avg-memory">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="card-title">平均磁盘使用率</div>
+                    <div class="card-text" id="avg-disk">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 监控图表区域 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <label class="form-label">监控指标</label>
+            <select class="form-select" id="metric-type">
+                <option value="cpu">CPU使用率(%)</option>
+                <option value="memory">内存使用率(%)</option>
+                <option value="disk">磁盘使用率(%)</option>
+            </select>
+        </div>
+        <div class="col-md-3 mb-3">
+            <label class="form-label">时间范围</label>
+            <select class="form-select" id="time-range">
+                <option value="1">最近1小时</option>
+                <option value="6">最近6小时</option>
+                <option value="24" selected>最近24小时</option>
+                <option value="72">最近3天</option>
+            </select>
+        </div>
+        <div class="col-md-3 mb-3 d-flex align-items-end">
+            <button class="btn btn-outline-secondary w-100" id="refresh-chart">手动刷新图表</button>
+        </div>
+        <div class="col-md-3 mb-3 d-flex align-items-end">
+            <button class="btn btn-outline-danger w-100" id="resolve-all-alerts">解决所有告警</button>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div id="metrics-chart" style="width: 100%; height: 500px;"></div>
+        </div>
+    </div>
+
+    <!-- 3. 告警列表区域 -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">未解决告警列表</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>告警ID</th>
+                            <th>服务器名称</th>
+                            <th>告警类型</th>
+                            <th>告警级别</th>
+                            <th>告警信息</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-table-body">
+                        <tr><td colspan="7" class="text-center">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 依赖JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // -------------------------- 全局配置（跨域关键：指向Ubuntu后端IP） --------------------------
+        const API_BASE_URL = "http://192.168.211.149:8000";  // Ubuntu虚拟机IP+后端端口
+        let metricsChart = null;  // ECharts实例
+        let ws = null;            // WebSocket实例（实时更新用）
+
+        // -------------------------- 页面初始化 --------------------------
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 1. 初始化图表
+            initMetricsChart();
+            // 2. 加载初始数据（统计+图表+告警）
+            await loadAllData();
+            // 3. 初始化WebSocket（实时接收后端更新）
+            initWebSocket();
+            // 4. 绑定按钮事件
+            bindEventListeners();
+            // 5. 定时刷新（30秒/次，与后端监控频率一致）
+            setInterval(loadAllData, 30000);
+        });
+
+        // -------------------------- 数据加载函数 --------------------------
+        /** 加载所有页面数据（统计+图表+告警） */
+        async function loadAllData() {
+            try {
+                // 并行加载3类数据，提升效率
+                const [stats, alerts] = await Promise.all([
+                    loadSystemStats(),
+                    loadAlertsList()
+                ]);
+                // 加载图表（依赖指标类型和时间范围，需单独调用）
+                await loadChartData();
+            } catch (err) {
+                console.error("页面数据加载失败：", err);
+            }
+        }
+
+        /** 加载系统统计数据（顶部卡片） */
+        async function loadSystemStats() {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/stats`);
+                const stats = response.data;
+                
+                // 更新统计卡片
+                document.getElementById('total-servers').textContent = stats.total_servers;
+                document.getElementById('online-servers').textContent = stats.online_servers;
+                document.getElementById('alert-servers').textContent = stats.servers_with_alerts;
+                document.getElementById('total-alerts').textContent = `${stats.total_alerts} (紧急: ${stats.critical_alerts})`;
+                document.getElementById('avg-cpu').textContent = `${stats.average_cpu}%`;
+                document.getElementById('avg-memory').textContent = `${stats.average_memory}%`;
+                document.getElementById('avg-disk').textContent = `${stats.average_disk}%`;
+                
+                return stats;
+            } catch (err) {
+                console.error("统计数据加载失败：", err);
+                throw err;
+            }
+        }
+
+        /** 加载告警列表 */
+        async function loadAlertsList() {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/alerts`, {
+                    params: { resolved: false, limit: 100 }  // 只加载未解决告警
+                });
+                const alerts = response.data;
+                const tableBody = document.getElementById('alerts-table-body');
+                
+                if (alerts.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无未解决告警</td></tr>';
+                    return alerts;
+                }
+                
+                // 渲染告警列表
+                tableBody.innerHTML = alerts.map(alert => `
+                    <tr>
+                        <td>${alert.id}</td>
+                        <td>${alert.server_name}</td>
+                        <td>
+                            <span class="badge ${alert.type === 'cpu' ? 'bg-primary' : alert.type === 'memory' ? 'bg-warning' : 'bg-danger'}">
+                                ${alert.type === 'cpu' ? 'CPU' : alert.type === 'memory' ? '内存' : '磁盘'}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge ${alert.level === 'critical' ? 'bg-danger' : 'bg-warning'}">
+                                ${alert.level === 'critical' ? '紧急' : '警告'}
+                            </span>
+                        </td>
+                        <td>${alert.message}</td>
+                        <td>${new Date(alert.created_at).toLocaleString()}</td>
+                        <td>
+                            <button class="btn btn-sm btn-success resolve-alert" data-id="${alert.id}">
+                                标记已解决
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                return alerts;
+            } catch (err) {
+                console.error("告警列表加载失败：", err);
+                document.getElementById('alerts-table-body').innerHTML = '<tr><td colspan="7" class="text-center text-danger">加载失败，请重试</td></tr>';
+                throw err;
+            }
+        }
+
+        // -------------------------- 图表相关函数 --------------------------
+        /** 初始化ECharts图表 */
+        function initMetricsChart() {
+            const chartDom = document.getElementById('metrics-chart');
+            metricsChart = echarts.init(chartDom);
+            
+            // 窗口 resize 时图表自适应
+            window.addEventListener('resize', () => {
+                metricsChart.resize();
+            });
+        }
+
+        /** 加载图表数据并渲染 */
+        async function loadChartData() {
+            const metricType = document.getElementById('metric-type').value;
+            const timeRange = parseInt(document.getElementById('time-range').value);
+            // 指标名称映射（用于图表标题和Y轴）
+            const metricMap = {
+                cpu: { label: 'CPU使用率(%)', color: '#4e79a7' },
+                memory: { label: '内存使用率(%)', color: '#f28e2c' },
+                disk: { label: '磁盘使用率(%)', color: '#e15759' }
+            };
+
+            try {
+                // 调用后端指标接口
+                const response = await axios.get(`${API_BASE_URL}/api/metrics`, {
+                    params: { hours: timeRange, limit: 1000 }
+                });
+                const metrics = response.data;
+                if (metrics.length === 0) {
+                    metricsChart.setOption({
+                        title: { text: `暂无${metricMap[metricType].label}数据`, left: 'center' },
+                        series: []
+                    });
+                    return;
+                }
+
+                // 按服务器分组处理数据（确保时间正序）
+                const serverDataMap = {};
+                metrics.forEach(metric => {
+                    const serverName = metric.server_name;
+                    if (!serverDataMap[serverName]) serverDataMap[serverName] = [];
+                    // 转换时间为时间戳，便于ECharts识别
+                    serverDataMap[serverName].push([
+                        new Date(metric.timestamp).getTime(),
+                        parseFloat(metric[`${metricType}_usage`])  // 取对应指标值
+                    ]);
+                });
+
+                // 排序数据（按时间正序）
+                Object.values(serverDataMap).forEach(dataList => {
+                    dataList.sort((a, b) => a[0] - b[0]);
+                });
+
+                // ECharts配置项
+                const option = {
+                    title: {
+                        text: `${metricMap[metricType].label}趋势（最近${timeRange}小时）`,
+                        left: 'center',
+                        textStyle: { fontSize: 16 }
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: (params) => {
+                            const timeStr = new Date(params[0].value[0]).toLocaleString();
+                            let html = `<div class="fw-bold">${timeStr}</div>`;
+                            params.forEach(item => {
+                                html += `<div>${item.seriesName}: ${item.value[1].toFixed(1)}%</div>`;
+                            });
+                            return html;
+                        }
+                    },
+                    legend: {
+                        data: Object.keys(serverDataMap),
+                        bottom: 0,
+                        textStyle: { fontSize: 12 }
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '4%',
+                        bottom: '15%',  // 给图例留空间
+                        top: '15%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'time',
+                        axisLabel: { formatter: '{HH}:{mm}', fontSize: 12 },
+                        splitLine: { lineStyle: { type: 'dashed' } }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: metricMap[metricType].label,
+                        min: 0,
+                        max: 100,  // 使用率最大100%
+                        axisLabel: { formatter: '{value}%', fontSize: 12 },
+                        splitLine: { lineStyle: { type: 'dashed' } }
+                    },
+                    series: Object.entries(serverDataMap).map(([serverName, dataList], index) => ({
+                        name: serverName,
+                        type: 'line',
+                        data: dataList,
+                        smooth: true,  // 平滑曲线
+                        lineStyle: { width: 2 },
+                        symbol: 'none',  // 不显示数据点（避免密集）
+                        itemStyle: { color: getSeriesColor(index) }  // 自动分配颜色
+                    }))
+                };
+
+                // 渲染图表
+                metricsChart.setOption(option);
+            } catch (err) {
+                console.error("图表数据加载失败：", err);
+                metricsChart.setOption({
+                    title: { text: `加载${metricMap[metricType].label}失败`, left: 'center', textStyle: { color: 'red' } },
+                    series: []
+                });
+            }
+        }
+
+        /** 生成图表系列颜色（避免重复） */
+        function getSeriesColor(index) {
+            const colors = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7'];
+            return colors[index % colors.length];
+        }
+
+        // -------------------------- WebSocket实时更新 --------------------------
+        /** 初始化WebSocket连接 */
+        function initWebSocket() {
+            // 关闭现有连接（避免重复）
+            if (ws) ws.close();
+
+            // WebSocket地址（基于Ubuntu IP）
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//192.168.211.149:8000/ws`;
+
+            ws = new WebSocket(wsUrl);
+
+            // 连接成功
+            ws.onopen = () => {
+                console.log("WebSocket连接成功（监控页）");
+                // 20秒发送一次ping，保持连接
+                setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+                }, 20000);
+            };
+
+            // 接收后端更新
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                // 后端推送"initial"（初始）或"update"（更新）时，刷新页面数据
+                if (data.type === 'initial' || data.type === 'update') {
+                    loadAllData();  // 刷新统计、图表、告警
+                }
+            };
+
+            // 连接关闭（自动重连）
+            ws.onclose = (event) => {
+                console.log(`WebSocket断开（监控页），3秒后重连... 代码: ${event.code}`);
+                setTimeout(initWebSocket, 3000);
+            };
+
+            // 连接错误
+            ws.onerror = (err) => {
+                console.error("WebSocket错误（监控页）：", err);
+                ws.close();
+            };
+        }
+
+        // -------------------------- 事件绑定 --------------------------
+        /** 绑定所有页面交互事件 */
+        function bindEventListeners() {
+            // 1. 手动刷新图表
+            document.getElementById('refresh-chart').addEventListener('click', loadChartData);
+
+            // 2. 指标类型/时间范围切换 → 刷新图表
+            document.getElementById('metric-type').addEventListener('change', loadChartData);
+            document.getElementById('time-range').addEventListener('change', loadChartData);
+
+            // 3. 解决单个告警
+            document.getElementById('alerts-table-body').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('resolve-alert')) {
+                    const alertId = parseInt(e.target.getAttribute('data-id'));
+                    await resolveSingleAlert(alertId);
+                }
+            });
+
+            // 4. 解决所有告警
+            document.getElementById('resolve-all-alerts').addEventListener('click', async () => {
+                if (confirm("确定要标记所有未解决告警为已解决吗？")) {
+                    await resolveAllAlerts();
+                }
+            });
+        }
+
+        /** 解决单个告警 */
+        async function resolveSingleAlert(alertId) {
+            try {
+                await axios.post(`${API_BASE_URL}/api/alerts/${alertId}/resolve`);
+                alert("告警已标记为已解决！");
+                await loadAlertsList();  // 刷新告警列表
+            } catch (err) {
+                console.error("解决告警失败：", err);
+                alert("操作失败：" + (err.response?.data?.detail || err.message));
+            }
+        }
+
+        /** 解决所有告警 */
+        async function resolveAllAlerts() {
+            try {
+                const response = await axios.post(`${API_BASE_URL}/api/alerts/resolve-all`);
+                alert(response.data.message);
+                await loadAlertsList();  // 刷新告警列表
+            } catch (err) {
+                console.error("解决所有告警失败：", err);
+                alert("操作失败：" + (err.response?.data?.detail || err.message));
+            }
+        }
+    </script>
+</body>
+</html>

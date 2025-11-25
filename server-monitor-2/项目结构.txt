@@ -1,0 +1,15 @@
+server-monitor/
+├── docker-compose.yml
+├── deploy.sh
+├── nginx/
+│   └── nginx.conf
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── main.py
+│   ├── ssh_monitor.py
+│   ├── websocket_manager.py
+│   └── startup.sh
+└── frontend/
+    └── monitoring.html
+    └── data-management.html

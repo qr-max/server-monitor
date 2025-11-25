@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务器数据管理</title>
+    <!-- 依赖库CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        /* 页面切换导航样式 */
+        .page-nav {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .page-nav a {
+            margin-right: 20px;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        .page-nav a.active {
+            color: #0d6efd;
+            text-decoration: underline;
+        }
+        /* 操作按钮组样式 */
+        .btn-group-sm .btn {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body class="container p-3">
+    <!-- 页面切换导航 -->
+    <div class="page-nav">
+        <a href="/monitoring">监控大屏</a>
+        <a href="/data-management" class="active">数据管理</a>
+    </div>
+
+    <!-- 页面标题 -->
+    <h1 class="mb-4 text-center">服务器数据管理</h1>
+
+    <!-- 功能按钮区 -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#server-modal">添加新服务器</button>
+            <button class="btn btn-outline-info ms-2" id="test-connection-btn">测试选中服务器连接</button>
+        </div>
+        <div class="col-md-6 d-flex justify-content-end">
+            <button class="btn btn-outline-warning" id="clear-metrics-btn">清空所有监控指标</button>
+            <button class="btn btn-outline-secondary ms-2" id="refresh-servers-btn">刷新服务器列表</button>
+        </div>
+    </div>
+
+    <!-- 1. 服务器列表区域 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">服务器列表</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 30px;">
+                                <input type="checkbox" id="select-all-servers">
+                            </th>
+                            <th>服务器名称</th>
+                            <th>IP地址</th>
+                            <th>SSH端口</th>
+                            <th>当前状态</th>
+                            <th>CPU阈值(%)</th>
+                            <th>内存阈值(%)</th>
+                            <th>磁盘阈值(%)</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servers-table-body">
+                        <tr><td colspan="9" class="text-center">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 系统信息区域 -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">系统信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="fw-bold">数据库路径</div>
+                    <div id="db-path" class="text-muted">加载中...</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="fw-bold">数据库大小</div>
+                    <div id="db-size" class="text-muted">加载中...</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="fw-bold">后端服务时间</div>
+                    <div id="server-time" class="text-muted">加载中...</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="fw-bold">Python版本</div>
+                    <div id="python-version" class="text-muted">加载中...</div>
+                </div>
+                <div class="col-md-8 mb-3">
+                    <div class="fw-bold">日志文件</div>
+                    <div id="log-files" class="text-muted">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 服务器添加/编辑模态框 -->
+    <div class="modal fade" id="server-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-title">添加新服务器</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="server-form">
+                        <!-- 隐藏字段：服务器ID（编辑时使用） -->
+                        <input type="hidden" id="server-id">
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">服务器名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="server-name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">IP地址 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="server-ip" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">SSH用户名 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="ssh-user" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">SSH密码 <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" id="ssh-password" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">SSH端口</label>
+                                <input type="number" class="form-control" id="ssh-port" value="22" min="1" max="65535">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">CPU阈值(%)</label>
+                                <input type="number" class="form-control" id="cpu-threshold" value="80" min="1" max="100">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">内存阈值(%)</label>
+                                <input type="number" class="form-control" id="memory-threshold" value="85" min="1" max="100">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">磁盘阈值(%)</label>
+                            <input type="number" class="form-control" id="disk-threshold" value="90" min="1" max="100">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="save-server-btn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 依赖JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // -------------------------- 全局配置（跨域关键：指向Ubuntu后端IP） --------------------------
+        const API_BASE_URL = "http://192.168.211.149:8000";  // Ubuntu虚拟机IP+后端端口
+        let ws = null;  // WebSocket实例（实时更新服务器状态）
+        let selectedServerIds = new Set();  // 选中的服务器ID（用于批量测试连接）
+
+        // -------------------------- 页面初始化 --------------------------
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 1. 加载初始数据（服务器列表+系统信息）
+            await Promise.all([
+                loadServersList(),
+                loadSystemInfo()
+            ]);
+            // 2. 初始化WebSocket（实时更新服务器状态）
+            initWebSocket();
+            // 3. 绑定按钮事件
+            bindEventListeners();
+            // 4. 定时刷新（30秒/次）
+            setInterval(async () => {
+                await Promise.all([
+                    loadServersList(),
+                    loadSystemInfo()
+                ]);
+            }, 30000);
+        });
+
+        // -------------------------- 数据加载函数 --------------------------
+        /** 加载服务器列表 */
+        async function loadServersList() {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/servers`);
+                const servers = response.data;
+                const tableBody = document.getElementById('servers-table-body');
+                const selectAllCheckbox = document.getElementById('select-all-servers');
+
+                // 清空选中状态
+                selectedServerIds.clear();
+                selectAllCheckbox.checked = false;
+
+                if (servers.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">暂无服务器数据</td></tr>';
+                    return;
+                }
+
+                // 渲染服务器列表
+                tableBody.innerHTML = servers.map(server => `
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="server-checkbox" data-id="${server.id}">
+                        </td>
+                        <td>${server.name}</td>
+                        <td>${server.ip}</td>
+                        <td>${server.ssh_port}</td>
+                        <td>
+                            <span class="badge ${server.status === 'online' ? 'bg-success' : 'bg-danger'}">
+                                ${server.status === 'online' ? '在线' : '离线'}
+                            </span>
+                        </td>
+                        <td>${server.cpu_threshold}</td>
+                        <td>${server.memory_threshold}</td>
+                        <td>${server.disk_threshold}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary edit-server" data-id="${server.id}">编辑</button>
+                                <button class="btn btn-outline-danger delete-server" data-id="${server.id}" data-name="${server.name}">删除</button>
+                                <button class="btn btn-outline-info test-server" data-id="${server.id}" data-name="${server.name}">测试连接</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+
+                // 恢复选中状态（重新渲染后）
+                document.querySelectorAll('.server-checkbox').forEach(checkbox => {
+                    const serverId = parseInt(checkbox.getAttribute('data-id'));
+                    if (selectedServerIds.has(serverId)) {
+                        checkbox.checked = true;
+                    }
+                });
+
+                return servers;
+            } catch (err) {
+                console.error("服务器列表加载失败：", err);
+                document.getElementById('servers-table-body').innerHTML = '<tr><td colspan="9" class="text-center text-danger">加载失败，请重试</td></tr>';
+                throw err;
+            }
+        }
+
+        /** 加载系统信息 */
+        async function loadSystemInfo() {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/system-info`);
+                const systemInfo = response.data;
+
+                // 更新系统信息显示
+                document.getElementById('db-path').textContent = systemInfo.database_path;
+                document.getElementById('db-size').textContent = formatFileSize(systemInfo.database_size);
+                document.getElementById('server-time').textContent = new Date(systemInfo.server_time).toLocaleString();
+                document.getElementById('python-version').textContent = systemInfo.python_version.split(' ')[0];
+                
+                // 处理日志文件显示
+                if (systemInfo.log_files.length === 0) {
+                    document.getElementById('log-files').textContent = '暂无日志文件';
+                } else {
+                    const logText = systemInfo.log_files.map(log => 
+                        `${log.name} (${formatFileSize(log.size)}) - ${new Date(log.modified).toLocaleString()}`
+                    ).join(' | ');
+                    document.getElementById('log-files').textContent = logText;
+                }
+
+                return systemInfo;
+            } catch (err) {
+                console.error("系统信息加载失败：", err);
+                Object.keys({
+                    'db-path': 'db-path',
+                    'db-size': 'db-size',
+                    'server-time': 'server-time',
+                    'python-version': 'python-version',
+                    'log-files': 'log-files'
+                }).forEach(id => {
+                    document.getElementById(id).textContent = '加载失败';
+                });
+                throw err;
+            }
+        }
+
+        /** 格式化文件大小（B→KB→MB→GB） */
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+            if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+            return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+        }
+
+        // -------------------------- WebSocket实时更新 --------------------------
+        /** 初始化WebSocket连接 */
+        function initWebSocket() {
+            if (ws) ws.close();
+
+            // WebSocket地址（基于Ubuntu IP）
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//192.168.211.149:8000/ws`;
+
+            ws = new WebSocket(wsUrl);
+
+            // 连接成功
+            ws.onopen = () => {
+                console.log("WebSocket连接成功（数据管理页）");
+                setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+                }, 20000);
+            };
+
+            // 接收后端更新
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'initial' || data.type === 'update') {
+                    loadServersList();  // 只刷新服务器列表（系统信息无需实时更-新）
+                }
+            };
+
+            // 连接关闭（自动重连）
+            ws.onclose = (event) => {
+                console.log(`WebSocket断开（数据管理页），3秒后重连... 代码: ${event.code}`);
+                setTimeout(initWebSocket, 3000);
+            };
+
+            // 连接错误
+            ws.onerror = (err) => {
+                console.error("WebSocket错误（数据管理页）：", err);
+                ws.close();
+            };
+        }
+
+        // -------------------------- 服务器CRUD函数 --------------------------
+        /** 打开添加服务器模态框 */
+        function openAddServerModal() {
+            const modalTitle = document.getElementById('modal-title');
+            const serverForm = document.getElementById('server-form');
+            const serverIdInput = document.getElementById('server-id');
+
+            // 重置表单
+            serverForm.reset();
+            serverIdInput.value = '';
+            modalTitle.textContent = '添加新服务器';
+
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('server-modal'));
+            modal.show();
+        }
+
+        /** 打开编辑服务器模态框 */
+        async function openEditServerModal(serverId) {
+            try {
+                // 调用后端接口获取服务器详情
+                const response = await axios.get(`${API_BASE_URL}/api/servers/${serverId}`);
+                const server = response.data;
+
+                // 填充表单
+                document.getElementById('server-id').value = server.id;
+                document.getElementById('server-name').value = server.name;
+                document.getElementById('server-ip').value = server.ip;
+                document.getElementById('ssh-user').value = server.ssh_user;
+                document.getElementById('ssh-password').value = server.ssh_password || '';
+                document.getElementById('ssh-port').value = server.ssh_port;
+                document.getElementById('cpu-threshold').value = server.cpu_threshold;
+                document.getElementById('memory-threshold').value = server.memory_threshold;
+                document.getElementById('disk-threshold').value = server.disk_threshold;
+
+                // 显示模态框
+                document.getElementById('modal-title').textContent = `编辑服务器：${server.name}`;
+                const modal = new bootstrap.Modal(document.getElementById('server-modal'));
+                modal.show();
+            } catch (err) {
+                console.error("加载服务器详情失败：", err);
+                alert("编辑失败：" + (err.response?.data?.detail || err.message));
+            }
+        }
+
+        /** 保存服务器（添加/编辑） */
+        async function saveServer() {
+            const serverId = document.getElementById('server-id').value;
+            const serverName = document.getElementById('server-name').value;
+            const serverIp = document.getElementById('server-ip').value;
+            const sshUser = document.getElementById('ssh-user').value;
+            const sshPassword = document.getElementById('ssh-password').value;
+            const sshPort = parseInt(document.getElementById('ssh-port').value);
+            const cpuThreshold = parseInt(document.getElementById('cpu-threshold').value);
+            const memoryThreshold = parseInt(document.getElementById('memory-threshold').value);
+            const diskThreshold = parseInt(document.getElementById('disk-threshold').value);
+
+            // 表单验证
+            if (!serverName || !serverIp || !sshUser || !sshPassword) {
+                alert("带*号的字段为必填项，请完善信息！");
+                return;
+            }
+
+            const serverData = {
+                name: serverName,
+                ip: serverIp,
+                ssh_user: sshUser,
+                ssh_password: sshPassword,
+                ssh_port: sshPort,
+                cpu_threshold: cpuThreshold,
+                memory_threshold: memoryThreshold,
+                disk_threshold: diskThreshold
+            };
+
+            try {
+                let response;
+                if (serverId) {
+                    // 编辑模式：PUT请求
+                    response = await axios.put(`${API_BASE_URL}/api/servers/${serverId}`, serverData);
+                    alert("服务器编辑成功！");
+                } else {
+                    // 添加模式：POST请求
+                    response = await axios.post(`${API_BASE_URL}/api/servers`, serverData);
+                    alert(`服务器添加成功！连接状态：${response.data.connection

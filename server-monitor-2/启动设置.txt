@@ -1,0 +1,27 @@
+2. 设置执行权限
+chmod +x deploy.sh
+chmod +x backend/startup.sh
+
+3. 一键部署
+./deploy.sh
+
+4. 访问系统
+部署完成后，打开浏览器访问
+http://your-server-ip
+
+5. 管理命令
+# 查看服务状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+
+# 重启服务
+docker-compose restart
+
+# 停止服务
+docker-compose down
+
+# 更新服务（修改代码后）
+docker-compose build --no-cache backend
+docker-compose up -d
