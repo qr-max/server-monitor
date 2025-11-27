@@ -3,437 +3,1698 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>服务器数据管理</title>
-    <!-- 依赖库CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <title>服务器实时监控大屏 - 数据管理</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
-        /* 页面切换导航样式 */
-        .page-nav {
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
+        :root {
+            --primary-color: #1a73e8;
+            --primary-dark: #0d47a1;
+            --secondary-color: #34a853;
+            --warning-color: #fbbc05;
+            --danger-color: #ea4335;
+            --info-color: #4285f4;
+            --dark-bg: #0a0e14;
+            --darker-bg: #05070a;
+            --card-bg: #131a24;
+            --card-hover: #1a2435;
+            --text-color: #e1e5e9;
+            --text-muted: #7f8fa4;
+            --border-color: #2a3a52;
+            --success-bg: rgba(52, 168, 83, 0.15);
+            --warning-bg: rgba(251, 188, 5, 0.15);
+            --danger-bg: rgba(234, 67, 53, 0.15);
+            --info-bg: rgba(66, 133, 244, 0.15);
+            --border-radius: 10px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --transition: all 0.3s ease;
+            --glow: 0 0 15px rgba(26, 115, 232, 0.5);
         }
-        .page-nav a {
-            margin-right: 20px;
-            font-size: 1.1rem;
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--darker-bg) 0%, var(--dark-bg) 100%);
+            color: var(--text-color);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            background: radial-gradient(circle at top right, rgba(26, 115, 232, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at bottom left, rgba(52, 168, 83, 0.1) 0%, transparent 50%);
+        }
+
+        /* 头部样式 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            background: rgba(10, 14, 20, 0.8);
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-shadow: 0 0 10px rgba(26, 115, 232, 0.3);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        /* 页面切换器 */
+        .page-tabs {
+            display: flex;
+            background: rgba(19, 26, 36, 0.7);
+            border-radius: var(--border-radius);
+            padding: 5px;
+            margin: 0 30px 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+        }
+
+        .page-tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .page-tab.active {
+            background: var(--primary-color);
+            box-shadow: var(--glow);
+        }
+
+        .page-tab.inactive {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .page-tab.inactive:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* 数据管理页面布局 */
+        .data-management-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 20px;
+            grid-template-areas: 
+                "controls controls"
+                "data-table data-charts"
+                "analysis analysis";
+            padding: 0 30px 30px;
+        }
+
+        /* 数据控制面板 */
+        .data-controls-panel {
+            grid-area: controls;
+            background: linear-gradient(135deg, var(--card-bg) 0%, #16202d 100%);
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .data-table-panel {
+            grid-area: data-table;
+            background: linear-gradient(135deg, var(--card-bg) 0%, #16202d 100%);
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .data-analysis-panel {
+            grid-area: analysis;
+            background: linear-gradient(135deg, var(--card-bg) 0%, #16202d 100%);
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        /* 新增的数据图表面板 */
+        .data-charts-panel {
+            grid-area: data-charts;
+            background: linear-gradient(135deg, var(--card-bg) 0%, #16202d 100%);
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        /* 数据表格 */
+        .data-table-container {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background-color: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+            color: var(--text-muted);
+            position: sticky;
+            top: 0;
+        }
+
+        .data-table tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        /* 控制元素 */
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--glow);
+        }
+
+        .btn-secondary {
+            background: var(--border-color);
+        }
+
+        .btn-success {
+            background: var(--secondary-color);
+        }
+
+        .btn-warning {
+            background: var(--warning-color);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+        }
+
+        .btn-sm {
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+
+        .server-select,
+        .time-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 10px 15px;
+            color: var(--text-color);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .server-select:focus,
+        .time-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+
+        /* 数据控制 */
+        .data-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* 统计卡片 */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-trend {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* 最后更新时间 */
+        .last-update {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(19, 26, 36, 0.7);
+            border-radius: var(--border-radius);
+            margin: 20px 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            margin-bottom: 25px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            color: var(--text-color);
+        }
+
+        .empty-state p {
+            margin-bottom: 25px;
+        }
+
+        /* 图表容器 */
+        .chart-container {
+            height: 300px;
+            margin-bottom: 25px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .analysis-card {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .analysis-card h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .panel-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 通知样式 */
+        .notifications-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 400px;
+        }
+
+        .notification {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px 18px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            background-color: var(--card-bg);
+            border-left: 4px solid var(--info-color);
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success {
+            border-left-color: var(--secondary-color);
+            background-color: var(--success-bg);
+        }
+
+        .notification.error {
+            border-left-color: var(--danger-color);
+            background-color: var(--danger-bg);
+        }
+
+        .notification.warning {
+            border-left-color: var(--warning-color);
+            background-color: var(--warning-bg);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification-icon {
+            font-size: 20px;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .notification-content {
+            flex: 1;
+        }
+
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .notification-message {
+            font-size: 14px;
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        /* 加载遮罩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(15, 20, 25, 0.9);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            color: var(--primary-color);
+        }
+
+        .loading-spinner i {
+            margin-bottom: 20px;
+        }
+
+        .loading-spinner p {
+            font-size: 18px;
             font-weight: 500;
         }
-        .page-nav a.active {
-            color: #0d6efd;
-            text-decoration: underline;
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
         }
-        /* 操作按钮组样式 */
-        .btn-group-sm .btn {
-            margin-right: 5px;
+
+        ::-webkit-scrollbar-track {
+            background: var(--dark-bg);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .data-management-grid {
+                grid-template-columns: 1fr;
+                grid-template-areas: 
+                    "controls"
+                    "data-table"
+                    "data-charts"
+                    "analysis";
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 20px;
+                align-items: flex-start;
+            }
+            
+            .header-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .analysis-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-bar {
+                grid-template-columns: 1fr;
+            }
+            
+            .data-controls {
+                flex-direction: column;
+            }
+        }
+
+        /* 动画效果 */
+        .fa-spin {
+            animation: fa-spin 1s infinite linear;
+        }
+
+        @keyframes fa-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 使用率状态颜色 */
+        .healthy {
+            color: var(--secondary-color);
+        }
+        
+        .warning {
+            color: var(--warning-color);
+        }
+        
+        .danger {
+            color: var(--danger-color);
+        }
+        
+        /* 状态指示器 */
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-indicator.online {
+            background-color: var(--secondary-color);
+        }
+        
+        .status-indicator.offline {
+            background-color: var(--danger-color);
+        }
+        
+        .status-indicator.unknown {
+            background-color: var(--text-muted);
         }
     </style>
 </head>
-<body class="container p-3">
-    <!-- 页面切换导航 -->
-    <div class="page-nav">
-        <a href="/monitoring">监控大屏</a>
-        <a href="/data-management" class="active">数据管理</a>
-    </div>
+<body>
+    <div id="app" class="app-container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1><i class="fas fa-server"></i> 服务器实时监控数据大屏系统</h1>
+            <div class="header-actions">
+                <button class="btn btn-success" @click="exportToExcel">
+                    <i class="fas fa-file-excel"></i> 导出数据
+                </button>
+                <button class="btn btn-secondary" @click="refreshData">
+                    <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshing }"></i> 
+                    {{ refreshing ? '刷新中...' : '刷新数据' }}
+                </button>
+                <button class="btn" @click="toggleAutoRefresh">
+                    <i class="fas" :class="autoRefresh ? 'fa-pause' : 'fa-play'"></i>
+                    {{ autoRefresh ? '暂停刷新' : '开启刷新' }}
+                </button>
+            </div>
+        </header>
 
-    <!-- 页面标题 -->
-    <h1 class="mb-4 text-center">服务器数据管理</h1>
+        <!-- 页面切换器 -->
+        <div class="page-tabs">
+            <div class="page-tab inactive" @click="switchToMonitoring">
+                <i class="fas fa-tachometer-alt"></i> 监控大屏
+            </div>
+            <div class="page-tab active">
+                <i class="fas fa-database"></i> 数据管理
+            </div>
+        </div>
 
-    <!-- 功能按钮区 -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#server-modal">添加新服务器</button>
-            <button class="btn btn-outline-info ms-2" id="test-connection-btn">测试选中服务器连接</button>
-        </div>
-        <div class="col-md-6 d-flex justify-content-end">
-            <button class="btn btn-outline-warning" id="clear-metrics-btn">清空所有监控指标</button>
-            <button class="btn btn-outline-secondary ms-2" id="refresh-servers-btn">刷新服务器列表</button>
-        </div>
-    </div>
+        <!-- 数据管理页面内容 -->
+        <div class="data-management-grid">
+            <!-- 数据控制面板 -->
+            <div class="data-controls-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-cog"></i> 数据控制</h2>
+                </div>
+                <div class="data-controls">
+                    <select v-model="dataFilterServer" class="server-select">
+                        <option value="">所有服务器</option>
+                        <option v-for="server in servers" :key="server.id" :value="server.id">
+                            {{ server.name }}
+                        </option>
+                    </select>
+                    <input type="date" v-model="dataFilterStartDate" class="server-select">
+                    <input type="date" v-model="dataFilterEndDate" class="server-select">
+                    <button class="btn btn-primary" @click="loadStoredData">
+                        <i class="fas fa-search"></i> 筛选数据
+                    </button>
+                    <button class="btn btn-success" @click="exportToExcel">
+                        <i class="fas fa-file-excel"></i> 导出Excel
+                    </button>
+                    <button class="btn btn-danger" @click="clearStoredData">
+                        <i class="fas fa-trash"></i> 清空数据
+                    </button>
+                </div>
+                <div class="stats-bar">
+                    <div class="stat-card">
+                        <h3><i class="fas fa-database"></i> 总数据量</h3>
+                        <div class="stat-value">{{ stats.total_metrics || 0 }}</div>
+                        <div class="stat-trend">条记录</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3><i class="fas fa-calendar"></i> 数据时间范围</h3>
+                        <div class="stat-value">{{ dataTimeRange }}</div>
+                        <div class="stat-trend">天</div>
+                    </div>
+                </div>
+            </div>
 
-    <!-- 1. 服务器列表区域 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">服务器列表</h5>
+            <!-- 数据表格面板 -->
+            <div class="data-table-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-table"></i> 监控数据记录</h2>
+                    <div class="panel-actions">
+                        <div class="pagination" style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn btn-sm" @click="prevPage" :disabled="currentPage === 1">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <span class="page-info" style="font-size: 14px; color: var(--text-muted);">第 {{ currentPage }} 页 / 共 {{ totalPages }} 页</span>
+                            <button class="btn btn-sm" @click="nextPage" :disabled="currentPage === totalPages">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>服务器</th>
+                                <th>时间</th>
+                                <th>CPU使用率</th>
+                                <th>内存使用率</th>
+                                <th>磁盘使用率</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="record in paginatedStoredData" :key="record.id">
+                                <td>{{ record.server_name }}</td>
+                                <td>{{ formatTime(record.timestamp) }}</td>
+                                <td :class="getUsageClass(record.cpu_usage, getServerThreshold(record.server_id, 'cpu'))">
+                                    {{ Math.round(record.cpu_usage) }}%
+                                </td>
+                                <td :class="getUsageClass(record.memory_usage, getServerThreshold(record.server_id, 'memory'))">
+                                    {{ Math.round(record.memory_usage) }}%
+                                </td>
+                                <td :class="getUsageClass(record.disk_usage, getServerThreshold(record.server_id, 'disk'))">
+                                    {{ Math.round(record.disk_usage) }}%
+                                </td>
+                                <td>
+                                    <span class="status-indicator" :class="getServerStatus(record.server_id)"></span>
+                                    {{ getServerStatus(record.server_id) === 'online' ? '在线' : '离线' }}
+                                </td>
+                            </tr>
+                            <tr v-if="paginatedStoredData.length === 0">
+                                <td colspan="6" style="text-align: center; padding: 30px;">
+                                    <i class="fas fa-database fa-2x" style="opacity: 0.5; margin-bottom: 10px;"></i>
+                                    <p>暂无监控数据</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 数据图表面板 -->
+            <div class="data-charts-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-chart-area"></i> 详细数据分析</h2>
+                </div>
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <h3>资源使用趋势</h3>
+                        <div id="resourceTrendChart" class="chart" style="height: 300px;"></div>
+                    </div>
+                    <div class="analysis-card">
+                        <h3>服务器状态分布</h3>
+                        <div id="serverStatusChart" class="chart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据分析面板 -->
+            <div class="data-analysis-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-chart-pie"></i> 性能指标对比</h2>
+                </div>
+                <div class="analysis-grid" style="grid-template-columns: 1fr;">
+                    <div class="analysis-card">
+                        <h3>性能指标对比</h3>
+                        <div id="performanceChart" class="chart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover table-bordered">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 30px;">
-                                <input type="checkbox" id="select-all-servers">
-                            </th>
-                            <th>服务器名称</th>
-                            <th>IP地址</th>
-                            <th>SSH端口</th>
-                            <th>当前状态</th>
-                            <th>CPU阈值(%)</th>
-                            <th>内存阈值(%)</th>
-                            <th>磁盘阈值(%)</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="servers-table-body">
-                        <tr><td colspan="9" class="text-center">加载中...</td></tr>
-                    </tbody>
-                </table>
+
+        <!-- 最后更新时间 -->
+        <div class="last-update">
+            <i class="fas fa-clock"></i>
+            最后更新: {{ lastUpdateTime }}
+            <span v-if="autoRefresh" class="auto-refresh-indicator">
+                <i class="fas fa-circle" style="color: var(--secondary-color);"></i> 自动刷新已开启
+            </span>
+        </div>
+
+        <!-- 全局通知 -->
+        <div v-if="notifications.length" class="notifications-container">
+            <div 
+                v-for="notification in notifications" 
+                :key="notification.id"
+                class="notification" 
+                :class="notification.type"
+            >
+                <div class="notification-icon">
+                    <i class="fas" :class="notification.icon"></i>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">{{ notification.title }}</div>
+                    <div class="notification-message">{{ notification.message }}</div>
+                </div>
+                <button class="notification-close" @click="removeNotification(notification.id)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 加载遮罩 -->
+        <div v-if="loading" class="loading-overlay">
+            <div class="loading-spinner">
+                <i class="fas fa-server fa-spin fa-3x"></i>
+                <p>加载服务器监控系统...</p>
             </div>
         </div>
     </div>
 
-    <!-- 2. 系统信息区域 -->
-    <div class="card shadow-sm">
-        <div class="card-header">
-            <h5 class="mb-0">系统信息</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <div class="fw-bold">数据库路径</div>
-                    <div id="db-path" class="text-muted">加载中...</div>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="fw-bold">数据库大小</div>
-                    <div id="db-size" class="text-muted">加载中...</div>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="fw-bold">后端服务时间</div>
-                    <div id="server-time" class="text-muted">加载中...</div>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="fw-bold">Python版本</div>
-                    <div id="python-version" class="text-muted">加载中...</div>
-                </div>
-                <div class="col-md-8 mb-3">
-                    <div class="fw-bold">日志文件</div>
-                    <div id="log-files" class="text-muted">加载中...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 服务器添加/编辑模态框 -->
-    <div class="modal fade" id="server-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modal-title">添加新服务器</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="server-form">
-                        <!-- 隐藏字段：服务器ID（编辑时使用） -->
-                        <input type="hidden" id="server-id">
-
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">服务器名称 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="server-name" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">IP地址 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="server-ip" required>
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">SSH用户名 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="ssh-user" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">SSH密码 <span class="text-danger">*</span></label>
-                                <input type="password" class="form-control" id="ssh-password" required>
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label">SSH端口</label>
-                                <input type="number" class="form-control" id="ssh-port" value="22" min="1" max="65535">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">CPU阈值(%)</label>
-                                <input type="number" class="form-control" id="cpu-threshold" value="80" min="1" max="100">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">内存阈值(%)</label>
-                                <input type="number" class="form-control" id="memory-threshold" value="85" min="1" max="100">
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">磁盘阈值(%)</label>
-                            <input type="number" class="form-control" id="disk-threshold" value="90" min="1" max="100">
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" id="save-server-btn">保存</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 依赖JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // -------------------------- 全局配置（跨域关键：指向Ubuntu后端IP） --------------------------
-        const API_BASE_URL = "http://192.168.211.149:8000";  // Ubuntu虚拟机IP+后端端口
-        let ws = null;  // WebSocket实例（实时更新服务器状态）
-        let selectedServerIds = new Set();  // 选中的服务器ID（用于批量测试连接）
-
-        // -------------------------- 页面初始化 --------------------------
-        document.addEventListener('DOMContentLoaded', async () => {
-            // 1. 加载初始数据（服务器列表+系统信息）
-            await Promise.all([
-                loadServersList(),
-                loadSystemInfo()
-            ]);
-            // 2. 初始化WebSocket（实时更新服务器状态）
-            initWebSocket();
-            // 3. 绑定按钮事件
-            bindEventListeners();
-            // 4. 定时刷新（30秒/次）
-            setInterval(async () => {
-                await Promise.all([
-                    loadServersList(),
-                    loadSystemInfo()
-                ]);
-            }, 30000);
-        });
-
-        // -------------------------- 数据加载函数 --------------------------
-        /** 加载服务器列表 */
-        async function loadServersList() {
-            try {
-                const response = await axios.get(`${API_BASE_URL}/api/servers`);
-                const servers = response.data;
-                const tableBody = document.getElementById('servers-table-body');
-                const selectAllCheckbox = document.getElementById('select-all-servers');
-
-                // 清空选中状态
-                selectedServerIds.clear();
-                selectAllCheckbox.checked = false;
-
-                if (servers.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">暂无服务器数据</td></tr>';
-                    return;
-                }
-
-                // 渲染服务器列表
-                tableBody.innerHTML = servers.map(server => `
-                    <tr>
-                        <td>
-                            <input type="checkbox" class="server-checkbox" data-id="${server.id}">
-                        </td>
-                        <td>${server.name}</td>
-                        <td>${server.ip}</td>
-                        <td>${server.ssh_port}</td>
-                        <td>
-                            <span class="badge ${server.status === 'online' ? 'bg-success' : 'bg-danger'}">
-                                ${server.status === 'online' ? '在线' : '离线'}
-                            </span>
-                        </td>
-                        <td>${server.cpu_threshold}</td>
-                        <td>${server.memory_threshold}</td>
-                        <td>${server.disk_threshold}</td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-primary edit-server" data-id="${server.id}">编辑</button>
-                                <button class="btn btn-outline-danger delete-server" data-id="${server.id}" data-name="${server.name}">删除</button>
-                                <button class="btn btn-outline-info test-server" data-id="${server.id}" data-name="${server.name}">测试连接</button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-
-                // 恢复选中状态（重新渲染后）
-                document.querySelectorAll('.server-checkbox').forEach(checkbox => {
-                    const serverId = parseInt(checkbox.getAttribute('data-id'));
-                    if (selectedServerIds.has(serverId)) {
-                        checkbox.checked = true;
-                    }
-                });
-
-                return servers;
-            } catch (err) {
-                console.error("服务器列表加载失败：", err);
-                document.getElementById('servers-table-body').innerHTML = '<tr><td colspan="9" class="text-center text-danger">加载失败，请重试</td></tr>';
-                throw err;
-            }
-        }
-
-        /** 加载系统信息 */
-        async function loadSystemInfo() {
-            try {
-                const response = await axios.get(`${API_BASE_URL}/api/system-info`);
-                const systemInfo = response.data;
-
-                // 更新系统信息显示
-                document.getElementById('db-path').textContent = systemInfo.database_path;
-                document.getElementById('db-size').textContent = formatFileSize(systemInfo.database_size);
-                document.getElementById('server-time').textContent = new Date(systemInfo.server_time).toLocaleString();
-                document.getElementById('python-version').textContent = systemInfo.python_version.split(' ')[0];
+        const { createApp, ref, onMounted, onUnmounted, computed, watch } = Vue;
+        
+        createApp({
+            setup() {
+                // 响应式数据
+                const servers = ref([]);
+                const stats = ref({});
+                const autoRefresh = ref(true);
+                const lastUpdateTime = ref('');
+                const notifications = ref([]);
+                const loading = ref(true);
+                const refreshing = ref(false);
                 
-                // 处理日志文件显示
-                if (systemInfo.log_files.length === 0) {
-                    document.getElementById('log-files').textContent = '暂无日志文件';
-                } else {
-                    const logText = systemInfo.log_files.map(log => 
-                        `${log.name} (${formatFileSize(log.size)}) - ${new Date(log.modified).toLocaleString()}`
-                    ).join(' | ');
-                    document.getElementById('log-files').textContent = logText;
-                }
+                // 数据管理相关
+                const storedData = ref([]);
+                const dataFilterServer = ref('');
+                const dataFilterStartDate = ref('');
+                const dataFilterEndDate = ref('');
+                const currentPage = ref(1);
+                const pageSize = ref(20);
 
-                return systemInfo;
-            } catch (err) {
-                console.error("系统信息加载失败：", err);
-                Object.keys({
-                    'db-path': 'db-path',
-                    'db-size': 'db-size',
-                    'server-time': 'server-time',
-                    'python-version': 'python-version',
-                    'log-files': 'log-files'
-                }).forEach(id => {
-                    document.getElementById(id).textContent = '加载失败';
+                // 图表实例
+                let serverStatusChart = null;
+                let resourceTrendChart = null;
+                let performanceChart = null;
+
+                // WebSocket连接
+                let websocket = null;
+                let reconnectAttempts = 0;
+                const maxReconnectAttempts = 5;
+                let pollingInterval = null;
+
+                // 计算属性
+                const filteredStoredData = computed(() => {
+                    let filtered = storedData.value;
+                    
+                    // 按服务器筛选
+                    if (dataFilterServer.value) {
+                        filtered = filtered.filter(record => record.server_id == dataFilterServer.value);
+                    }
+                    
+                    // 按日期筛选
+                    if (dataFilterStartDate.value) {
+                        const startDate = new Date(dataFilterStartDate.value);
+                        filtered = filtered.filter(record => new Date(record.timestamp) >= startDate);
+                    }
+                    
+                    if (dataFilterEndDate.value) {
+                        const endDate = new Date(dataFilterEndDate.value);
+                        endDate.setHours(23, 59, 59, 999);
+                        filtered = filtered.filter(record => new Date(record.timestamp) <= endDate);
+                    }
+                    
+                    return filtered;
                 });
-                throw err;
+                
+                const totalPages = computed(() => {
+                    return Math.ceil(filteredStoredData.value.length / pageSize.value) || 1;
+                });
+                
+                const paginatedStoredData = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value;
+                    const end = start + pageSize.value;
+                    return filteredStoredData.value.slice(start, end);
+                });
+                
+                const dataTimeRange = computed(() => {
+                    if (storedData.value.length === 0) return 0;
+                    const dates = storedData.value.map(record => new Date(record.timestamp));
+                    const minDate = new Date(Math.min(...dates));
+                    const maxDate = new Date(Math.max(...dates));
+                    const diffTime = Math.abs(maxDate - minDate);
+                    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                });
+
+                // 方法
+                const switchToMonitoring = () => {
+                    window.location.href = 'monitoring.html';
+                };
+
+                const initWebSocket = () => {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/ws`;
+                    
+                    try {
+                        websocket = new WebSocket(wsUrl);
+                        
+                        websocket.onopen = () => {
+                            console.log('WebSocket连接已建立');
+                            reconnectAttempts = 0;
+                            showNotification('连接成功', '已连接到实时监控服务', 'success');
+                            
+                            // 清除轮询
+                            if (pollingInterval) {
+                                clearInterval(pollingInterval);
+                                pollingInterval = null;
+                            }
+                        };
+                        
+                        websocket.onmessage = (event) => {
+                            try {
+                                const data = JSON.parse(event.data);
+                                handleWebSocketMessage(data);
+                            } catch (error) {
+                                console.error('解析WebSocket消息失败:', error);
+                            }
+                        };
+                        
+                        websocket.onclose = () => {
+                            console.log('WebSocket连接已关闭');
+                            if (reconnectAttempts < maxReconnectAttempts) {
+                                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                                console.log(`将在 ${delay/1000} 秒后尝试重新连接...`);
+                                setTimeout(initWebSocket, delay);
+                                reconnectAttempts++;
+                            } else {
+                                console.log('达到最大重连次数，启用轮询模式');
+                                showNotification('连接断开', '已启用轮询模式更新数据', 'warning');
+                                startPolling();
+                            }
+                        };
+                        
+                        websocket.onerror = (error) => {
+                            console.error('WebSocket错误:', error);
+                        };
+                    } catch (error) {
+                        console.error('创建WebSocket连接失败:', error);
+                        startPolling();
+                    }
+                };
+
+                const startPolling = () => {
+                    if (pollingInterval) return;
+                    
+                    console.log('启动轮询模式');
+                    pollingInterval = setInterval(() => {
+                        refreshData();
+                    }, 10000); // 每10秒轮询一次
+                };
+
+                const handleWebSocketMessage = (data) => {
+                    switch (data.type) {
+                        case 'initial':
+                        case 'update':
+                            servers.value = data.servers || [];
+                            stats.value = data.stats || {};
+                            lastUpdateTime.value = new Date(data.timestamp).toLocaleString('zh-CN');
+                            updateDataCharts();
+                            break;
+                    }
+                };
+
+                const fetchServers = async () => {
+                    try {
+                        const response = await fetch('/api/servers');
+                        if (!response.ok) throw new Error('网络响应不正常');
+                        servers.value = await response.json();
+                    } catch (error) {
+                        console.error('获取服务器列表失败:', error);
+                        showNotification('错误', '获取服务器列表失败', 'error');
+                    }
+                };
+
+                const fetchStats = async () => {
+                    try {
+                        const response = await fetch('/api/stats');
+                        if (!response.ok) throw new Error('网络响应不正常');
+                        stats.value = await response.json();
+                        lastUpdateTime.value = new Date().toLocaleString('zh-CN');
+                    } catch (error) {
+                        console.error('获取统计数据失败:', error);
+                    }
+                };
+
+                const fetchStoredData = async () => {
+                    try {
+                        const response = await fetch('/api/metrics?hours=168&limit=1000');
+                        if (!response.ok) throw new Error('网络响应不正常');
+                        storedData.value = await response.json();
+                    } catch (error) {
+                        console.error('获取存储数据失败:', error);
+                    }
+                };
+
+                const refreshData = async () => {
+                    if (refreshing.value) return;
+                    
+                    refreshing.value = true;
+                    try {
+                        await Promise.all([
+                            fetchServers(),
+                            fetchStats(),
+                            fetchStoredData()
+                        ]);
+                        
+                        updateDataCharts();
+                    } catch (error) {
+                        console.error('刷新数据失败:', error);
+                        showNotification('错误', '刷新数据失败', 'error');
+                    } finally {
+                        refreshing.value = false;
+                    }
+                };
+
+                const toggleAutoRefresh = () => {
+                    autoRefresh.value = !autoRefresh.value;
+                    showNotification(
+                        '信息', 
+                        autoRefresh.value ? '已开启自动刷新' : '已暂停自动刷新', 
+                        'info'
+                    );
+                };
+
+                const getUsageClass = (usage, threshold) => {
+                    if (usage > threshold) return 'danger';
+                    if (usage > threshold * 0.8) return 'warning';
+                    return 'healthy';
+                };
+
+                const getServerStatus = (serverId) => {
+                    const server = servers.value.find(s => s.id === serverId);
+                    return server ? server.status : 'unknown';
+                };
+
+                const getServerThreshold = (serverId, type) => {
+                    const server = servers.value.find(s => s.id === serverId);
+                    if (!server) return type === 'disk' ? 90 : (type === 'memory' ? 85 : 80);
+                    
+                    switch (type) {
+                        case 'cpu': return server.cpu_threshold || 80;
+                        case 'memory': return server.memory_threshold || 85;
+                        case 'disk': return server.disk_threshold || 90;
+                        default: return 80;
+                    }
+                };
+
+                const formatTime = (timestamp) => {
+                    if (!timestamp) return '未知';
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diffMs = now - date;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    
+                    if (diffMins < 5) {
+                        return '刚刚';
+                    } else if (diffMins < 60) {
+                        return `${diffMins} 分钟前`;
+                    } else {
+                        return date.toLocaleString('zh-CN', { 
+                            month: '2-digit', 
+                            day: '2-digit', 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        });
+                    }
+                };
+
+                const showNotification = (title, message, type = 'info') => {
+                    const id = Date.now();
+                    const icons = {
+                        success: 'fa-check-circle',
+                        error: 'fa-exclamation-circle',
+                        warning: 'fa-exclamation-triangle',
+                        info: 'fa-info-circle'
+                    };
+                    
+                    notifications.value.push({ 
+                        id, 
+                        title, 
+                        message, 
+                        type,
+                        icon: icons[type] || 'fa-info-circle'
+                    });
+                    setTimeout(() => removeNotification(id), 5000);
+                };
+
+                const removeNotification = (id) => {
+                    notifications.value = notifications.value.filter(notification => notification.id !== id);
+                };
+
+                const loadStoredData = () => {
+                    currentPage.value = 1;
+                    // 数据已通过计算属性过滤
+                    showNotification('成功', `已加载 ${filteredStoredData.value.length} 条监控数据`, 'success');
+                };
+
+                const clearStoredData = async () => {
+                    if (!confirm('确定要清空所有存储的监控数据吗？此操作不可恢复。')) return;
+    
+                    try {
+                         const response = await fetch('/api/metrics', {
+                                method: 'DELETE'
+                          });
+
+                          if (!response.ok) {
+                              const errorData = await response.json();
+                              throw new Error(errorData.detail || '清空数据失败');
+                          }
+
+                          const result = await response.json();
+
+                          // 清空本地数据
+                          storedData.value = [];
+                          currentPage.value = 1;
+
+                          // 刷新数据
+                          await refreshData();
+
+                          showNotification('成功', result.message || '数据清空成功', 'success');
+                    } catch (error) {
+                          console.error('清空数据失败:', error);
+                          showNotification('错误', error.message, 'error');
+                    }
+                };
+
+                const exportToExcel = async () => {
+                    try {
+                        // 准备导出数据
+                        const exportData = storedData.value.map(record => ({
+                            '服务器名称': record.server_name,
+                            '时间': new Date(record.timestamp).toLocaleString('zh-CN'),
+                            'CPU使用率(%)': Math.round(record.cpu_usage),
+                            '内存使用率(%)': Math.round(record.memory_usage),
+                            '磁盘使用率(%)': Math.round(record.disk_usage),
+                            '状态': getServerStatus(record.server_id) === 'online' ? '在线' : '离线'
+                        }));
+                        
+                        // 创建工作簿
+                        const wb = XLSX.utils.book_new();
+                        
+                        // 创建工作表
+                        const ws = XLSX.utils.json_to_sheet(exportData);
+                        
+                        // 将工作表添加到工作簿
+                        XLSX.utils.book_append_sheet(wb, ws, "监控数据");
+                        
+                        // 生成Excel文件并下载
+                        const today = new Date();
+                        const dateStr = `${today.getFullYear()}${(today.getMonth()+1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+                        XLSX.writeFile(wb, `服务器监控数据_${dateStr}.xlsx`);
+                        
+                        showNotification('成功', '数据已成功导出为Excel文件', 'success');
+                    } catch (error) {
+                        console.error('导出Excel失败:', error);
+                        showNotification('错误', '导出Excel文件失败', 'error');
+                    }
+                };
+
+                const prevPage = () => {
+                    if (currentPage.value > 1) {
+                        currentPage.value--;
+                    }
+                };
+
+                const nextPage = () => {
+                    if (currentPage.value < totalPages.value) {
+                        currentPage.value++;
+                    }
+                };
+
+                // 图表相关方法
+                const initCharts = () => {
+                    // 等待DOM完全渲染
+                    setTimeout(() => {
+                        // 初始化数据管理页面图表
+                        const serverStatusChartEl = document.getElementById('serverStatusChart');
+                        const resourceTrendChartEl = document.getElementById('resourceTrendChart');
+                        const performanceChartEl = document.getElementById('performanceChart');
+                        
+                        if (serverStatusChartEl) serverStatusChart = echarts.init(serverStatusChartEl);
+                        if (resourceTrendChartEl) resourceTrendChart = echarts.init(resourceTrendChartEl);
+                        if (performanceChartEl) performanceChart = echarts.init(performanceChartEl);
+                        
+                        // 设置默认图表选项 - 修复空数据问题
+                        const defaultEmptyOption = {
+                            title: {
+                                text: '暂无数据',
+                                textStyle: {
+                                    color: '#7f8fa4',
+                                    fontSize: 16
+                                },
+                                left: 'center',
+                                top: 'center'
+                            },
+                            graphic: {
+                                type: 'text',
+                                left: 'center',
+                                top: '45%',
+                                style: {
+                                    text: '等待数据加载...',
+                                    fontSize: 14,
+                                    fill: '#7f8fa4'
+                                }
+                            }
+                        };
+
+                        // 服务器状态图表默认配置
+                        if (serverStatusChart) {
+                            serverStatusChart.setOption({
+                                ...defaultEmptyOption,
+                                title: { text: '服务器状态分布' },
+                                series: [{
+                                    type: 'pie',
+                                    radius: ['40%', '70%'],
+                                    center: ['50%', '45%'],
+                                    data: [],
+                                    label: { show: false }
+                                }]
+                            });
+                        }
+
+                        // 资源趋势图表默认配置
+                        if (resourceTrendChart) {
+                            resourceTrendChart.setOption({
+                                title: { 
+                                    text: '资源使用趋势',
+                                    left: 'center',
+                                    textStyle: { color: '#e1e5e9', fontSize: 14 }
+                                },
+                                legend: {
+                                    data: ['CPU', '内存', '磁盘'],
+                                    textStyle: { color: '#e1e5e9' },
+                                    top: '5%'
+                                },
+                                xAxis: {
+                                    type: 'category',
+                                    data: [],
+                                    axisLabel: { color: '#7f8fa4', rotate: 45 }
+                                },
+                                yAxis: {
+                                    type: 'value',
+                                    min: 0,
+                                    max: 100,
+                                    axisLabel: {
+                                        formatter: '{value}%',
+                                        color: '#7f8fa4'
+                                    },
+                                    splitLine: {
+                                        lineStyle: { color: 'rgba(127, 143, 164, 0.1)' }
+                                    }
+                                },
+                                series: [
+                                    {
+                                        name: 'CPU',
+                                        type: 'line',
+                                        data: [],
+                                        smooth: true,
+                                        lineStyle: { width: 3, color: '#1a73e8' },
+                                        areaStyle: {
+                                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                                { offset: 0, color: 'rgba(26, 115, 232, 0.3)' },
+                                                { offset: 1, color: 'rgba(26, 115, 232, 0.05)' }
+                                            ])
+                                        }
+                                    },
+                                    {
+                                        name: '内存',
+                                        type: 'line',
+                                        data: [],
+                                        smooth: true,
+                                        lineStyle: { width: 3, color: '#34a853' },
+                                        areaStyle: {
+                                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                                { offset: 0, color: 'rgba(52, 168, 83, 0.3)' },
+                                                { offset: 1, color: 'rgba(52, 168, 83, 0.05)' }
+                                            ])
+                                        }
+                                    },
+                                    {
+                                        name: '磁盘',
+                                        type: 'line',
+                                        data: [],
+                                        smooth: true,
+                                        lineStyle: { width: 3, color: '#fbbc05' },
+                                        areaStyle: {
+                                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                                { offset: 0, color: 'rgba(251, 188, 5, 0.3)' },
+                                                { offset: 1, color: 'rgba(251, 188, 5, 0.05)' }
+                                            ])
+                                        }
+                                    }
+                                ],
+                                tooltip: {
+                                    trigger: 'axis',
+                                    backgroundColor: 'rgba(19, 26, 36, 0.9)',
+                                    textStyle: { color: '#e1e5e9' }
+                                },
+                                grid: {
+                                    top: '15%',
+                                    right: '20px',
+                                    bottom: '20px',
+                                    left: '20px',
+                                    containLabel: true
+                                }
+                            });
+                        }
+
+                        // 性能对比图表默认配置
+                        if (performanceChart) {
+                            performanceChart.setOption({
+                                title: { 
+                                    text: '性能指标对比',
+                                    left: 'center',
+                                    textStyle: { color: '#e1e5e9', fontSize: 14 }
+                                },
+                                legend: {
+                                    data: ['CPU使用率', '内存使用率', '磁盘使用率'],
+                                    textStyle: { color: '#e1e5e9' },
+                                    top: '5%'
+                                },
+                                tooltip: {
+                                    trigger: 'axis',
+                                    axisPointer: { type: 'shadow' }
+                                },
+                                grid: {
+                                    left: '3%',
+                                    right: '4%',
+                                    bottom: '10%',
+                                    top: '15%',
+                                    containLabel: true
+                                },
+                                xAxis: {
+                                    type: 'category',
+                                    data: [],
+                                    axisLabel: {
+                                        color: '#7f8fa4',
+                                        interval: 0,
+                                        rotate: 45
+                                    }
+                                },
+                                yAxis: {
+                                    type: 'value',
+                                    min: 0,
+                                    max: 100,
+                                    axisLabel: {
+                                        formatter: '{value}%',
+                                        color: '#7f8fa4'
+                                    }
+                                },
+                                series: [
+                                    {
+                                        name: 'CPU使用率',
+                                        type: 'bar',
+                                        barGap: 0,
+                                        data: [],
+                                        itemStyle: { color: '#1a73e8' }
+                                    },
+                                    {
+                                        name: '内存使用率',
+                                        type: 'bar',
+                                        barGap: 0,
+                                        data: [],
+                                        itemStyle: { color: '#34a853' }
+                                    },
+                                    {
+                                        name: '磁盘使用率',
+                                        type: 'bar',
+                                        barGap: 0,
+                                        data: [],
+                                        itemStyle: { color: '#fbbc05' }
+                                    }
+                                ]
+                            });
+                        }
+                        
+                        // 设置窗口大小变化监听
+                        window.addEventListener('resize', handleResize);
+                    }, 100);
+                };
+
+                const handleResize = () => {
+                    if (serverStatusChart) serverStatusChart.resize();
+                    if (resourceTrendChart) resourceTrendChart.resize();
+                    if (performanceChart) performanceChart.resize();
+                };
+
+                const updateDataCharts = async () => {
+                    if (!serverStatusChart || !resourceTrendChart || !performanceChart) return;
+
+                    try {
+                        // 更新服务器状态图表
+                        const onlineCount = servers.value.filter(s => s.status === 'online').length;
+                        const offlineCount = servers.value.filter(s => s.status === 'offline').length;
+                        const unknownCount = servers.value.filter(s => s.status === 'unknown').length;
+                        
+                        serverStatusChart.setOption({
+                            legend: {
+                                orient: 'horizontal',
+                                bottom: 10,
+                                data: ['在线', '离线', '未知'],
+                                textStyle: {
+                                    color: '#e1e5e9'
+                                }
+                            },
+                            series: [{
+                                type: 'pie',
+                                radius: ['40%', '70%'],
+                                center: ['50%', '45%'],
+                                data: [
+                                    { value: onlineCount, name: '在线' },
+                                    { value: offlineCount, name: '离线' },
+                                    { value: unknownCount, name: '未知' }
+                                ],
+                                color: ['#34a853', '#ea4335', '#7f8fa4'],
+                                label: {
+                                    color: '#e1e5e9'
+                                },
+                                emphasis: {
+                                    itemStyle: {
+                                        shadowBlur: 10,
+                                        shadowOffsetX: 0,
+                                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                    }
+                                }
+                            }]
+                        });
+
+                        // 更新资源趋势图表
+                        const recentData = storedData.value.slice(-24); // 最近24条数据
+                        const timeData = recentData.map(d => new Date(d.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}));
+                        const cpuData = recentData.map(d => d.cpu_usage);
+                        const memoryData = recentData.map(d => d.memory_usage);
+                        const diskData = recentData.map(d => d.disk_usage);
+                        
+                        resourceTrendChart.setOption({
+                            legend: {
+                                data: ['CPU', '内存', '磁盘'],
+                                textStyle: {
+                                    color: '#e1e5e9'
+                                },
+                                top: '5%'
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: timeData,
+                                axisLabel: {
+                                    color: '#7f8fa4',
+                                    rotate: 45
+                                }
+                            },
+                            yAxis: {
+                                type: 'value',
+                                min: 0,
+                                max: 100,
+                                axisLabel: {
+                                    formatter: '{value}%',
+                                    color: '#7f8fa4'
+                                },
+                                splitLine: {
+                                    lineStyle: {
+                                        color: 'rgba(127, 143, 164, 0.1)'
+                                    }
+                                }
+                            },
+                            series: [
+                                {
+                                    name: 'CPU',
+                                    type: 'line',
+                                    data: cpuData,
+                                    smooth: true,
+                                    lineStyle: {
+                                        width: 3,
+                                        color: '#1a73e8'
+                                    },
+                                    areaStyle: {
+                                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: 'rgba(26, 115, 232, 0.3)' },
+                                            { offset: 1, color: 'rgba(26, 115, 232, 0.05)' }
+                                        ])
+                                    }
+                                },
+                                {
+                                    name: '内存',
+                                    type: 'line',
+                                    data: memoryData,
+                                    smooth: true,
+                                    lineStyle: {
+                                        width: 3,
+                                        color: '#34a853'
+                                    },
+                                    areaStyle: {
+                                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: 'rgba(52, 168, 83, 0.3)' },
+                                            { offset: 1, color: 'rgba(52, 168, 83, 0.05)' }
+                                        ])
+                                    }
+                                },
+                                {
+                                    name: '磁盘',
+                                    type: 'line',
+                                    data: diskData,
+                                    smooth: true,
+                                    lineStyle: {
+                                        width: 3,
+                                        color: '#fbbc05'
+                                    },
+                                    areaStyle: {
+                                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: 'rgba(251, 188, 5, 0.3)' },
+                                            { offset: 1, color: 'rgba(251, 188, 5, 0.05)' }
+                                        ])
+                                    }
+                                }
+                            ],
+                            tooltip: {
+                                trigger: 'axis',
+                                backgroundColor: 'rgba(19, 26, 36, 0.9)',
+                                textStyle: {
+                                    color: '#e1e5e9'
+                                }
+                            },
+                            grid: {
+                                top: '15%',
+                                right: '20px',
+                                bottom: '20px',
+                                left: '20px',
+                                containLabel: true
+                            }
+                        });
+
+                        // 更新性能对比图表
+                        const serverNames = servers.value.map(s => s.name);
+                        const cpuUsages = servers.value.map(s => s.cpu_usage || 0);
+                        const memoryUsages = servers.value.map(s => s.memory_usage || 0);
+                        const diskUsages = servers.value.map(s => s.disk_usage || 0);
+                        
+                        performanceChart.setOption({
+                            legend: {
+                                data: ['CPU使用率', '内存使用率', '磁盘使用率'],
+                                textStyle: {
+                                    color: '#e1e5e9'
+                                },
+                                top: '5%'
+                            },
+                            tooltip: {
+                                trigger: 'axis',
+                                axisPointer: {
+                                    type: 'shadow'
+                                },
+                                formatter: function (params) {
+                                    let result = params[0].name + '<br/>';
+                                    params.forEach(function (item) {
+                                        result += item.marker + ' ' + item.seriesName + ': ' + item.value + '%<br/>';
+                                    });
+                                    return result;
+                                }
+                            },
+                            grid: {
+                                left: '3%',
+                                right: '4%',
+                                bottom: '10%',
+                                top: '15%',
+                                containLabel: true
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: serverNames,
+                                axisLabel: {
+                                    color: '#7f8fa4',
+                                    interval: 0,
+                                    rotate: 45
+                                }
+                            },
+                            yAxis: {
+                                type: 'value',
+                                min: 0,
+                                max: 100,
+                                axisLabel: {
+                                    formatter: '{value}%',
+                                    color: '#7f8fa4'
+                                }
+                            },
+                            series: [
+                                {
+                                    name: 'CPU使用率',
+                                    type: 'bar',
+                                    barGap: 0,
+                                    emphasis: {
+                                        focus: 'series'
+                                    },
+                                    data: cpuUsages,
+                                    itemStyle: {
+                                        color: '#1a73e8'
+                                    }
+                                },
+                                {
+                                    name: '内存使用率',
+                                    type: 'bar',
+                                    barGap: 0,
+                                    emphasis: {
+                                        focus: 'series'
+                                    },
+                                    data: memoryUsages,
+                                    itemStyle: {
+                                        color: '#34a853'
+                                    }
+                                },
+                                {
+                                    name: '磁盘使用率',
+                                    type: 'bar',
+                                    barGap: 0,
+                                    emphasis: {
+                                        focus: 'series'
+                                    },
+                                    data: diskUsages,
+                                    itemStyle: {
+                                        color: '#fbbc05'
+                                    }
+                                }
+                            ]
+                        });
+                    } catch (error) {
+                        console.error('更新数据图表失败:', error);
+                    }
+                };
+
+                // 生命周期
+                onMounted(() => {
+                    loading.value = true;
+                    
+                    // 初始化图表
+                    initCharts();
+                    
+                    // 初始化数据
+                    Promise.all([
+                        fetchServers(),
+                        fetchStats(),
+                        fetchStoredData()
+                    ])
+                    .then(() => {
+                        updateDataCharts();
+                    })
+                    .finally(() => {
+                        loading.value = false;
+                    });
+                    
+                    // 初始化WebSocket
+                    initWebSocket();
+                    
+                    // 设置默认日期筛选
+                    const today = new Date();
+                    const oneWeekAgo = new Date();
+                    oneWeekAgo.setDate(today.getDate() - 7);
+                    dataFilterStartDate.value = oneWeekAgo.toISOString().split('T')[0];
+                    dataFilterEndDate.value = today.toISOString().split('T')[0];
+                    
+                    // 自动刷新定时器
+                    const interval = setInterval(() => {
+                        if (autoRefresh.value) {
+                            refreshData();
+                        }
+                    }, 30000); // 每30秒刷新一次
+
+                    onUnmounted(() => {
+                        clearInterval(interval);
+                        window.removeEventListener('resize', handleResize);
+                        if (websocket) websocket.close();
+                        if (pollingInterval) clearInterval(pollingInterval);
+                    });
+                });
+
+                return {
+                    servers,
+                    stats,
+                    autoRefresh,
+                    lastUpdateTime,
+                    notifications,
+                    loading,
+                    refreshing,
+                    storedData,
+                    dataFilterServer,
+                    dataFilterStartDate,
+                    dataFilterEndDate,
+                    paginatedStoredData,
+                    currentPage,
+                    totalPages,
+                    dataTimeRange,
+                    switchToMonitoring,
+                    refreshData,
+                    toggleAutoRefresh,
+                    getUsageClass,
+                    getServerStatus,
+                    getServerThreshold,
+                    formatTime,
+                    removeNotification,
+                    loadStoredData,
+                    clearStoredData,
+                    exportToExcel,
+                    prevPage,
+                    nextPage
+                };
             }
-        }
-
-        /** 格式化文件大小（B→KB→MB→GB） */
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return `${bytes} B`;
-            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-            if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-            return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-        }
-
-        // -------------------------- WebSocket实时更新 --------------------------
-        /** 初始化WebSocket连接 */
-        function initWebSocket() {
-            if (ws) ws.close();
-
-            // WebSocket地址（基于Ubuntu IP）
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//192.168.211.149:8000/ws`;
-
-            ws = new WebSocket(wsUrl);
-
-            // 连接成功
-            ws.onopen = () => {
-                console.log("WebSocket连接成功（数据管理页）");
-                setInterval(() => {
-                    if (ws.readyState === WebSocket.OPEN) ws.send("ping");
-                }, 20000);
-            };
-
-            // 接收后端更新
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'initial' || data.type === 'update') {
-                    loadServersList();  // 只刷新服务器列表（系统信息无需实时更-新）
-                }
-            };
-
-            // 连接关闭（自动重连）
-            ws.onclose = (event) => {
-                console.log(`WebSocket断开（数据管理页），3秒后重连... 代码: ${event.code}`);
-                setTimeout(initWebSocket, 3000);
-            };
-
-            // 连接错误
-            ws.onerror = (err) => {
-                console.error("WebSocket错误（数据管理页）：", err);
-                ws.close();
-            };
-        }
-
-        // -------------------------- 服务器CRUD函数 --------------------------
-        /** 打开添加服务器模态框 */
-        function openAddServerModal() {
-            const modalTitle = document.getElementById('modal-title');
-            const serverForm = document.getElementById('server-form');
-            const serverIdInput = document.getElementById('server-id');
-
-            // 重置表单
-            serverForm.reset();
-            serverIdInput.value = '';
-            modalTitle.textContent = '添加新服务器';
-
-            // 显示模态框
-            const modal = new bootstrap.Modal(document.getElementById('server-modal'));
-            modal.show();
-        }
-
-        /** 打开编辑服务器模态框 */
-        async function openEditServerModal(serverId) {
-            try {
-                // 调用后端接口获取服务器详情
-                const response = await axios.get(`${API_BASE_URL}/api/servers/${serverId}`);
-                const server = response.data;
-
-                // 填充表单
-                document.getElementById('server-id').value = server.id;
-                document.getElementById('server-name').value = server.name;
-                document.getElementById('server-ip').value = server.ip;
-                document.getElementById('ssh-user').value = server.ssh_user;
-                document.getElementById('ssh-password').value = server.ssh_password || '';
-                document.getElementById('ssh-port').value = server.ssh_port;
-                document.getElementById('cpu-threshold').value = server.cpu_threshold;
-                document.getElementById('memory-threshold').value = server.memory_threshold;
-                document.getElementById('disk-threshold').value = server.disk_threshold;
-
-                // 显示模态框
-                document.getElementById('modal-title').textContent = `编辑服务器：${server.name}`;
-                const modal = new bootstrap.Modal(document.getElementById('server-modal'));
-                modal.show();
-            } catch (err) {
-                console.error("加载服务器详情失败：", err);
-                alert("编辑失败：" + (err.response?.data?.detail || err.message));
-            }
-        }
-
-        /** 保存服务器（添加/编辑） */
-        async function saveServer() {
-            const serverId = document.getElementById('server-id').value;
-            const serverName = document.getElementById('server-name').value;
-            const serverIp = document.getElementById('server-ip').value;
-            const sshUser = document.getElementById('ssh-user').value;
-            const sshPassword = document.getElementById('ssh-password').value;
-            const sshPort = parseInt(document.getElementById('ssh-port').value);
-            const cpuThreshold = parseInt(document.getElementById('cpu-threshold').value);
-            const memoryThreshold = parseInt(document.getElementById('memory-threshold').value);
-            const diskThreshold = parseInt(document.getElementById('disk-threshold').value);
-
-            // 表单验证
-            if (!serverName || !serverIp || !sshUser || !sshPassword) {
-                alert("带*号的字段为必填项，请完善信息！");
-                return;
-            }
-
-            const serverData = {
-                name: serverName,
-                ip: serverIp,
-                ssh_user: sshUser,
-                ssh_password: sshPassword,
-                ssh_port: sshPort,
-                cpu_threshold: cpuThreshold,
-                memory_threshold: memoryThreshold,
-                disk_threshold: diskThreshold
-            };
-
-            try {
-                let response;
-                if (serverId) {
-                    // 编辑模式：PUT请求
-                    response = await axios.put(`${API_BASE_URL}/api/servers/${serverId}`, serverData);
-                    alert("服务器编辑成功！");
-                } else {
-                    // 添加模式：POST请求
-                    response = await axios.post(`${API_BASE_URL}/api/servers`, serverData);
-                    alert(`服务器添加成功！连接状态：${response.data.connection
+        }).mount('#app');
+    </script>
+</body>
+</html>
