@@ -1,8 +1,7 @@
 import os
 import json
 import time
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pymysql
@@ -129,7 +128,7 @@ def validate_ssh_auth(server_data):
         return False
 
 def collect_server_metrics(server_id):
-    """收集单台服务器的监控指标"""
+    """收集单台服务器的监控指标 - 真实环境版本"""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -140,34 +139,9 @@ def collect_server_metrics(server_id):
             if not server:
                 return
             
-            # 生成模拟的监控数据
-            # 服务器ID为1-5的CPU使用率保持在10%以下
-            if 1 <= server_id <= 5:
-                cpu_usage = round(random.uniform(2.0, 9.9), 1)
-            else:
-                cpu_usage = round(random.uniform(2.0, 90.0), 1)
-                
-            memory_usage = round(random.uniform(20.0, 85.0), 1)
-            disk_usage = round(random.uniform(30.0, 80.0), 1)
-            
-            # 插入监控数据
-            cursor.execute('''
-                INSERT INTO monitor_data (server_id, cpu_usage, memory_usage, disk_usage)
-                VALUES (%s, %s, %s, %s)
-            ''', (server_id, cpu_usage, memory_usage, disk_usage))
-            
-            # 检查是否超过阈值，生成告警
-            if cpu_usage > server[6]:  # server[6]是cpu_threshold
-                cursor.execute('''
-                    INSERT INTO alerts (server_id, alert_type, message, severity)
-                    VALUES (%s, 'cpu', %s, 'warning')
-                ''', (server_id, f'CPU使用率过高: {cpu_usage}% (阈值: {server[6]}%)'))
-            
-            if memory_usage > server[7]:  # server[7]是memory_threshold
-                cursor.execute('''
-                    INSERT INTO alerts (server_id, alert_type, message, severity)
-                    VALUES (%s, 'memory', %s, 'warning')
-                ''', (server_id, f'内存使用率过高: {memory_usage}% (阈值: {server[7]}%)'))
+            # 在实际环境中，这里应该通过SSH连接到服务器获取真实的监控数据
+            # 由于这是真实环境版本，我们只更新服务器状态为在线
+            # 实际的监控数据收集需要根据具体环境实现
             
             # 更新服务器状态为在线
             cursor.execute('''
@@ -178,6 +152,16 @@ def collect_server_metrics(server_id):
         conn.commit()
     except Exception as e:
         print(f"收集服务器 {server_id} 指标失败: {e}")
+        # 如果收集失败，将服务器状态设置为离线
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE servers SET status = 'offline', updated_at = NOW() 
+                    WHERE id = %s
+                ''', (server_id,))
+            conn.commit()
+        except Exception as update_error:
+            print(f"更新服务器状态失败: {update_error}")
     finally:
         conn.close()
 
@@ -478,39 +462,6 @@ if __name__ == '__main__':
     scheduler.start()
     
     print("启动定时数据采集任务，每5分钟执行一次")
-    
-    # 添加默认服务器数据（如果数据库为空）
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) as count FROM servers")
-            if cursor.fetchone()['count'] == 0:
-                print("添加默认服务器数据...")
-                default_servers = [
-                    ("Web服务器-01", "192.168.211.101", "QR", "qr123", 22, 80, 85),
-                    ("数据库服务器", "192.168.1.102", "root", "123456", 22, 80, 85),
-                    ("文件服务器", "192.168.212.103", "test", "te123", 22, 80, 85),
-                    ("应用服务器", "192.168.50.104", "root", "123456", 22, 80, 85),
-                    ("内网服务器", "172.16.10.105", "abc", "abc123", 22, 80, 85)
-                ]
-                
-                for server in default_servers:
-                    cursor.execute('''
-                        INSERT INTO servers (name, ip, ssh_user, ssh_password, ssh_port, cpu_threshold, memory_threshold, status)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'online')
-                    ''', server)
-                
-                conn.commit()
-                
-                # 为每个服务器收集初始数据
-                cursor.execute("SELECT id FROM servers")
-                servers = cursor.fetchall()
-                for server in servers:
-                    collect_server_metrics(server[0])
-    except Exception as e:
-        print(f"添加默认服务器失败: {e}")
-    finally:
-        conn.close()
     
     # 启动Flask应用，监听所有网络接口的5000端口
     app.run(host='0.0.0.0', port=5000, debug=False)
